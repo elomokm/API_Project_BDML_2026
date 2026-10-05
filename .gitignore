@@ -1,0 +1,16 @@
+# Énoncé du professeur : conservé en local, non versionné
+docs/enonce.pdf
+
+# Secrets (clé JWT, mots de passe de base) : jamais versionnés
+.env
+*.env
+*.pem
+*.key
+
+# Système et éditeurs
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Les règles propres à la stack (build, dépendances) seront ajoutées après D-001
