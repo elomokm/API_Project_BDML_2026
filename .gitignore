@@ -11,6 +11,7 @@ docs/enonce.pdf
 .DS_Store
 .idea/
 .vscode/
+.metals/
 *.iml
 
 # Les règles propres à la stack (build, dépendances) seront ajoutées après D-001

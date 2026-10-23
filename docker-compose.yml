@@ -1,0 +1,25 @@
+# Base PostgreSQL du projet (D-002).
+# Lancement depuis la racine du dépôt : docker compose up -d
+# Les identifiants sont lus dans le fichier .env (non versionné, voir .env.example).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: messagerie-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volume nommé : les données survivent à la suppression du conteneur.
+      # Seul « docker compose down -v » les efface.
+      - messagerie-donnees:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  messagerie-donnees:
