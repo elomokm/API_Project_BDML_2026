@@ -1,0 +1,187 @@
+{
+  "info": {
+    "name": "Messagerie instantanée",
+    "description": "Tests manuels de l'API REST (D-004). À exécuter dans l'ordre, serveur lancé sur baseUrl. Chaque exécution crée un utilisateur au nom unique : la collection peut être rejouée sans nettoyer la base.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "" },
+    { "key": "motDePasse", "value": "motdepasse123" },
+    { "key": "utilisateurId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Comptes",
+      "item": [
+        {
+          "name": "Créer un compte (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "pm.collectionVariables.set('username', 'alice_' + Date.now());"
+              ] }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.test('En-tête Location vers la ressource créée', () => pm.expect(pm.response.headers.get('Location')).to.match(/^\\/api\\/utilisateurs\\/\\d+$/));",
+                "const corps = pm.response.json();",
+                "pm.test('Le mot de passe n\\'est jamais renvoyé', () => pm.expect(corps).to.not.have.property('motDePasse'));",
+                "pm.collectionVariables.set('utilisateurId', corps.id);"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"motDePasse\": \"{{motDePasse}}\"\n}" },
+            "url": "{{baseUrl}}/api/comptes"
+          }
+        },
+        {
+          "name": "Créer le même compte (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                "pm.test('Format ProblemDetail', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"motDePasse\": \"autremotdepasse\"\n}" },
+            "url": "{{baseUrl}}/api/comptes"
+          }
+        },
+        {
+          "name": "Créer un compte invalide (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                "const champs = pm.response.json().erreurs.map(e => e.champ);",
+                "pm.test('Champs fautifs listés', () => pm.expect(champs).to.include.members(['username', 'motDePasse']));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"a b\",\n  \"motDePasse\": \"court\"\n}" },
+            "url": "{{baseUrl}}/api/comptes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connexion",
+      "item": [
+        {
+          "name": "Se connecter (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "pm.test('Utilisateur authentifié', () => pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"motDePasse\": \"{{motDePasse}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Mauvais mot de passe (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                "pm.collectionVariables.set('reponseMauvaisMotDePasse', pm.response.text());"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"motDePasse\": \"mauvaismotdepasse\"\n}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Compte inexistant (401, même réponse)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                "pm.test('Réponse identique au mauvais mot de passe', () => pm.expect(pm.response.text()).to.eql(pm.collectionVariables.get('reponseMauvaisMotDePasse')));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"compte_inexistant\",\n  \"motDePasse\": \"mauvaismotdepasse\"\n}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Utilisateurs",
+      "item": [
+        {
+          "name": "Lister les utilisateurs (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "const liste = pm.response.json();",
+                "pm.test('Contient le compte créé', () => pm.expect(liste.map(u => u.username)).to.include(pm.collectionVariables.get('username')));",
+                "pm.test('Aucun mot de passe', () => liste.forEach(u => pm.expect(u).to.not.have.property('motDePasse')));"
+              ] }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/utilisateurs" }
+        },
+        {
+          "name": "Un utilisateur (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              ] }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/utilisateurs/{{utilisateurId}}" }
+        },
+        {
+          "name": "Utilisateur inexistant (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+              ] }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/utilisateurs/999999" }
+        }
+      ]
+    }
+  ]
+}

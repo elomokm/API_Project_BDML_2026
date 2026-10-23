@@ -64,6 +64,23 @@ cd server
 Les tests démarrent leur propre PostgreSQL jetable (Testcontainers) : Docker doit être
 lancé, mais la base de développement n'est jamais touchée.
 
+### Tests manuels (Postman)
+
+Importer `postman/messagerie.postman_collection.json` dans Postman, lancer le serveur, puis
+exécuter la collection dans l'ordre. Chaque exécution crée un utilisateur au nom unique.
+
+## API REST
+
+| Méthode | URL | Rôle | Codes |
+|---|---|---|---|
+| `POST` | `/api/comptes` | Créer un compte | 201, 400, 409 |
+| `POST` | `/api/auth/login` | S'authentifier | 200, 400, 401 |
+| `GET` | `/api/utilisateurs` | Lister les utilisateurs | 200 |
+| `GET` | `/api/utilisateurs/{id}` | Consulter un utilisateur | 200, 404 |
+
+Les erreurs sont renvoyées au format ProblemDetail (RFC 9457, `application/problem+json`).
+Les mots de passe sont hachés avec Argon2id et ne sont jamais renvoyés.
+
 ### Clients
 
 À venir.
