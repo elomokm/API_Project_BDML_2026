@@ -21,20 +21,38 @@ clients/desktop/   client « bureau »   (à venir)
 ## Prérequis
 
 - Java 17
-- Docker (à partir de l'étape base de données)
+- Docker (base PostgreSQL et tests)
 
 Maven n'a pas besoin d'être installé : le projet embarque le wrapper `mvnw`.
 
 ## Lancement
 
-### Serveur
+### 1. Configuration (une seule fois)
+
+```bash
+cp .env.example .env
+```
+
+Puis choisir un mot de passe dans `.env`. Ce fichier n'est jamais versionné ; il est lu par
+Docker Compose et par le serveur.
+
+### 2. Base de données
+
+```bash
+docker compose up -d
+```
+
+PostgreSQL démarre dans un conteneur ; ses données sont conservées dans un volume Docker
+(`docker compose down` les garde, `docker compose down -v` les efface).
+
+### 3. Serveur
 
 ```bash
 cd server
 ./mvnw spring-boot:run
 ```
 
-Le serveur écoute sur `http://localhost:8080`.
+Le serveur crée le schéma au démarrage (`schema.sql`) et écoute sur `http://localhost:8080`.
 
 ### Tests
 
@@ -43,6 +61,9 @@ cd server
 ./mvnw test
 ```
 
+Les tests démarrent leur propre PostgreSQL jetable (Testcontainers) : Docker doit être
+lancé, mais la base de développement n'est jamais touchée.
+
 ### Clients
 
 À venir.
@@ -50,7 +71,7 @@ cd server
 ## État d'avancement
 
 - [x] Squelette du serveur
-- [ ] Modèle de données et persistance
+- [x] Modèle de données et persistance
 - [ ] API REST
 - [ ] Authentification JWT
 - [ ] Canal WebSocket
