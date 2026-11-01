@@ -11,6 +11,7 @@
   --bulle-autre: #e6ecec;
   --en-ligne: #16a34a;
   --erreur: #b42318;
+  --lu: #a5f3fc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
     --bulle-autre: #1f2d2d;
     --en-ligne: #4ade80;
     --erreur: #f97066;
+    --lu: #0e7490;
   }
 }
 
@@ -163,3 +165,9 @@ button.lien { background: none; border: 0; color: var(--accent); min-height: 44p
   background: var(--fond);
 }
 .saisie button { padding: 0 18px; border-radius: 22px; }
+
+/* Bonus (D-016) : coches d'état et indicateur de saisie */
+
+.coches { letter-spacing: -0.2em; margin-left: 4px; }
+.coches.lu { color: var(--lu); opacity: 1; }
+.indicateur-saisie { display: block; font-size: .85rem; font-style: italic; color: var(--accent); }

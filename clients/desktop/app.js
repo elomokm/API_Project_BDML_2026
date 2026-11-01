@@ -16,7 +16,15 @@ const session = {
   selection: null,        // id de l'interlocuteur affiché
   socket: null,
   minuterie: null,
+  ecrivent: new Map(),    // id de qui m'écrit -> minuterie d'expiration de l'indicateur
+  derniereFrappe: 0,      // dernier « je tape » envoyé, 0 si je ne tape pas
+  arretFrappe: null,
 };
+
+// Indicateur de saisie (D-017).
+const RENOUVELER_SAISIE_MS = 2500;
+const ARRET_SAISIE_MS = 3000;
+const EXPIRATION_SAISIE_MS = 5000;
 
 const el = (id) => document.getElementById(id);
 
@@ -111,9 +119,66 @@ function traiter(evenement) {
     contact.connecte = evenement.connecte;
     dessinerContacts();
     dessinerEntete();
+  } else if (evenement.type === "etat") {
+    majEtats(evenement.messageIds, evenement.etat);
+  } else if (evenement.type === "saisie") {
+    saisieDistante(evenement.expediteurId, evenement.actif);
   } else if (evenement.type === "erreur") {
     el("erreur-envoi").textContent = evenement.message;
   }
+}
+
+/** Changement d'état de mes messages : livré, puis lu (D-017). */
+function majEtats(ids, nouvelEtat) {
+  const concernes = new Set(ids);
+  for (const fil of session.fils.values()) {
+    fil.filter((m) => concernes.has(m.id)).forEach((m) => { m.etat = nouvelEtat; });
+  }
+  if (session.selection) dessinerMessages(false);
+}
+
+/**
+ * Lecture (D-017) : si la conversation est affichée et la fenêtre visible, un seul événement
+ * « lu jusqu'au message N » couvre tous les messages reçus non lus.
+ */
+function confirmerLecture() {
+  if (!session.selection || document.visibilityState !== "visible") return;
+  if (session.socket?.readyState !== WebSocket.OPEN) return;
+  const aLire = (session.fils.get(session.selection) ?? [])
+    .filter((m) => m.expediteurId === session.selection && m.etat !== "LU");
+  if (aLire.length === 0) return;
+  session.socket.send(JSON.stringify({ type: "lu", messageId: aLire[aLire.length - 1].id }));
+  aLire.forEach((m) => { m.etat = "LU"; });
+}
+
+function saisieDistante(auteur, actif) {
+  clearTimeout(session.ecrivent.get(auteur));
+  if (actif) {
+    // Expiration automatique : la fin peut ne jamais arriver (application fermée).
+    session.ecrivent.set(auteur, setTimeout(() => saisieDistante(auteur, false), EXPIRATION_SAISIE_MS));
+  } else {
+    session.ecrivent.delete(auteur);
+  }
+  dessinerContacts();
+  dessinerEntete();
+}
+
+function frappe() {
+  if (!session.selection || session.socket?.readyState !== WebSocket.OPEN) return;
+  if (Date.now() - session.derniereFrappe > RENOUVELER_SAISIE_MS) {
+    session.socket.send(JSON.stringify({ type: "saisie", destinataireId: session.selection, actif: true }));
+    session.derniereFrappe = Date.now();
+  }
+  clearTimeout(session.arretFrappe);
+  session.arretFrappe = setTimeout(finFrappe, ARRET_SAISIE_MS);
+}
+
+function finFrappe() {
+  clearTimeout(session.arretFrappe);
+  if (session.derniereFrappe && session.selection && session.socket?.readyState === WebSocket.OPEN) {
+    session.socket.send(JSON.stringify({ type: "saisie", destinataireId: session.selection, actif: false }));
+  }
+  session.derniereFrappe = 0;
 }
 
 function arriveeMessage(message) {
@@ -124,8 +189,10 @@ function arriveeMessage(message) {
   }
   const inedit = ranger(message);
   const interlocuteur = recu ? message.expediteurId : message.destinataireId;
+  if (recu && session.ecrivent.has(interlocuteur)) saisieDistante(interlocuteur, false);
   if (interlocuteur === session.selection) {
     dessinerMessages(true);
+    confirmerLecture();
   } else if (inedit && recu) {
     const contact = session.contacts.get(interlocuteur);
     if (contact) contact.nonLus += 1;
@@ -183,6 +250,12 @@ function dessinerContacts() {
     nom.className = "nom";
     nom.textContent = contact.username;
     bouton.append(pastille, nom);
+    if (session.ecrivent.has(contact.id)) {
+      const ecrit = document.createElement("span");
+      ecrit.className = "ecrit";
+      ecrit.textContent = "écrit…";
+      bouton.append(ecrit);
+    }
     if (contact.nonLus > 0) {
       const badge = document.createElement("span");
       badge.className = "non-lus";
@@ -202,6 +275,8 @@ function dessinerEntete() {
   el("nom-interlocuteur").textContent = contact.username;
   el("statut-interlocuteur").textContent = contact.connecte ? "en ligne" : "hors ligne";
   el("statut-interlocuteur").classList.toggle("en-ligne", contact.connecte);
+  el("indicateur-saisie").hidden = !session.ecrivent.has(contact.id);
+  el("indicateur-saisie").textContent = `${contact.username} est en train d'écrire…`;
 }
 
 function dessinerMessages(versLeBas) {
@@ -216,10 +291,20 @@ function dessinerMessages(versLeBas) {
     meta.className = "meta";
     meta.dateTime = message.dateEnvoi;
     meta.textContent = horodatage(message.dateEnvoi);
+    if (message.expediteurId === session.utilisateur.id) meta.append(marqueEtat(message.etat));
     ligne.append(meta);
     liste.append(ligne);
   }
   if (versLeBas) zone.scrollTop = zone.scrollHeight;
+}
+
+/** Coches d'état de mes messages (D-016) : envoyé ✓, livré ✓✓, lu ✓✓ en couleur. */
+function marqueEtat(etatMessage) {
+  const marque = document.createElement("span");
+  marque.className = "etat-message" + (etatMessage === "LU" ? " lu" : "");
+  marque.textContent = etatMessage === "ENVOYE" ? " ✓" : " ✓✓";
+  marque.title = { ENVOYE: "Envoyé", LIVRE: "Livré", LU: "Lu" }[etatMessage];
+  return marque;
 }
 
 /** « 2026-09-21T10:15:30 » : heure seule si aujourd'hui, sinon date et heure. */
@@ -233,6 +318,7 @@ function horodatage(dateEnvoi) {
 // Navigation
 
 async function selectionner(interlocuteur) {
+  finFrappe();
   session.selection = interlocuteur;
   session.contacts.get(interlocuteur).nonLus = 0;
   el("sans-conversation").hidden = true;
@@ -244,6 +330,7 @@ async function selectionner(interlocuteur) {
   try {
     await chargerPage(interlocuteur);
     dessinerMessages(true);
+    confirmerLecture();
   } catch (erreur) {
     el("erreur-envoi").textContent = erreur.message;
   }
@@ -260,10 +347,12 @@ async function ouvrirApplication() {
 
 function fermerSession() {
   clearTimeout(session.minuterie);
+  clearTimeout(session.arretFrappe);
+  session.ecrivent.forEach(clearTimeout);
   const socket = session.socket;
   Object.assign(session, {
     jeton: null, utilisateur: null, contacts: new Map(), fils: new Map(),
-    dejaVus: new Set(), selection: null, socket: null,
+    dejaVus: new Set(), selection: null, socket: null, ecrivent: new Map(), derniereFrappe: 0,
   });
   socket?.close();
   sessionStorage.removeItem("messagerie");
@@ -314,8 +403,16 @@ el("formulaire-envoi").addEventListener("submit", (e) => {
   e.preventDefault(); // Entrée dans le champ soumet le formulaire
   const champ = el("champ-message");
   const contenu = champ.value.trim();
-  if (contenu && envoyerMessage(contenu)) champ.value = "";
+  if (contenu && envoyerMessage(contenu)) {
+    champ.value = "";
+    finFrappe();
+  }
 });
+
+el("champ-message").addEventListener("input", frappe);
+
+// Retour sur la fenêtre avec une conversation ouverte : les messages arrivés sont lus.
+document.addEventListener("visibilitychange", confirmerLecture);
 
 // Reprise après rafraîchissement
 

@@ -13,6 +13,7 @@
   --bulle-autre: #eef1f5;
   --en-ligne: #16a34a;
   --erreur: #c92a2a;
+  --lu: #a5d8ff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +30,7 @@
     --bulle-autre: #232937;
     --en-ligne: #4ade80;
     --erreur: #ff8787;
+    --lu: #1b3a8a;
   }
 }
 
@@ -182,6 +184,13 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   padding: 12px 24px 20px;
 }
 .saisie input { flex: 1; }
+
+/* Bonus (D-016) : coches d'état et indicateur de saisie */
+
+.etat-message { letter-spacing: -0.2em; margin-left: 4px; }
+.etat-message.lu { color: var(--lu); }
+.indicateur-saisie { margin-left: auto; font-size: .85rem; font-style: italic; color: var(--accent); }
+.contacts .ecrit { font-size: .8rem; font-style: italic; color: var(--accent); }
 
 /* Fenêtre étroite : la liste des contacts passe au-dessus. */
 @media (max-width: 720px) {

@@ -16,7 +16,16 @@ const etat = {
   ouverte: null,              // id de l'interlocuteur affiché
   canal: null,
   reconnexion: null,
+  saisies: new Map(),         // id de qui m'écrit -> minuterie d'expiration de l'indicateur
+  saisieEnvoyee: 0,           // dernier « je tape » envoyé (horodatage), 0 si je ne tape pas
+  finSaisie: null,
 };
+
+// Indicateur de saisie (D-017) : renouvelé au plus toutes les 2,5 s pendant la frappe, fin
+// signalée après 3 s sans frappe ; l'affichage reçu expire seul après 5 s.
+const RENOUVELLEMENT_SAISIE_MS = 2500;
+const FIN_SAISIE_MS = 3000;
+const EXPIRATION_SAISIE_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
 
@@ -120,10 +129,73 @@ function recevoir(evenement) {
       }
       break;
     }
+    case "etat":
+      changerEtats(evenement.messageIds, evenement.etat);
+      break;
+    case "saisie":
+      recevoirSaisie(evenement.expediteurId, evenement.actif);
+      break;
     case "erreur":
       $("erreur-envoi").textContent = evenement.message;
       break;
   }
+}
+
+/** Mes messages passent à « livré » ou « lu » : mise à jour des coches (D-017). */
+function changerEtats(ids, nouvelEtat) {
+  const cibles = new Set(ids);
+  for (const liste of etat.conversations.values()) {
+    for (const message of liste) {
+      if (cibles.has(message.id)) message.etat = nouvelEtat;
+    }
+  }
+  if (etat.ouverte) afficherMessages(false);
+}
+
+/**
+ * Signale la lecture (D-017) : conversation ouverte et page visible. Un seul événement
+ * « lu jusqu'au message N » couvre tous les messages reçus non lus de la conversation.
+ */
+function signalerLecture() {
+  if (!etat.ouverte || document.visibilityState !== "visible") return;
+  if (etat.canal?.readyState !== WebSocket.OPEN) return;
+  const nonLus = (etat.conversations.get(etat.ouverte) ?? [])
+    .filter((m) => m.expediteurId === etat.ouverte && m.etat !== "LU");
+  if (nonLus.length === 0) return;
+  etat.canal.send(JSON.stringify({ type: "lu", messageId: nonLus.at(-1).id }));
+  nonLus.forEach((m) => { m.etat = "LU"; });
+}
+
+function recevoirSaisie(expediteurId, actif) {
+  clearTimeout(etat.saisies.get(expediteurId));
+  if (actif) {
+    // Si l'expéditeur ferme son application en pleine frappe, la fin n'arrive jamais :
+    // l'indicateur disparaît seul.
+    etat.saisies.set(expediteurId, setTimeout(() => recevoirSaisie(expediteurId, false), EXPIRATION_SAISIE_MS));
+  } else {
+    etat.saisies.delete(expediteurId);
+  }
+  afficherEnTete();
+  afficherContacts();
+}
+
+/** Appelé à chaque frappe dans le champ de message. */
+function jeTape() {
+  if (!etat.ouverte || etat.canal?.readyState !== WebSocket.OPEN) return;
+  if (Date.now() - etat.saisieEnvoyee > RENOUVELLEMENT_SAISIE_MS) {
+    etat.canal.send(JSON.stringify({ type: "saisie", destinataireId: etat.ouverte, actif: true }));
+    etat.saisieEnvoyee = Date.now();
+  }
+  clearTimeout(etat.finSaisie);
+  etat.finSaisie = setTimeout(arreterSaisie, FIN_SAISIE_MS);
+}
+
+function arreterSaisie() {
+  clearTimeout(etat.finSaisie);
+  if (etat.saisieEnvoyee && etat.ouverte && etat.canal?.readyState === WebSocket.OPEN) {
+    etat.canal.send(JSON.stringify({ type: "saisie", destinataireId: etat.ouverte, actif: false }));
+  }
+  etat.saisieEnvoyee = 0;
 }
 
 function recevoirMessage(message) {
@@ -134,8 +206,10 @@ function recevoirMessage(message) {
   }
   const nouveau = memoriser(message);
   const interlocuteur = pourMoi ? message.expediteurId : message.destinataireId;
+  if (pourMoi && etat.saisies.has(interlocuteur)) recevoirSaisie(interlocuteur, false);
   if (interlocuteur === etat.ouverte) {
     afficherMessages(true);
+    signalerLecture();
   } else if (nouveau && pourMoi) {
     const contact = etat.contacts.get(interlocuteur);
     if (contact) contact.nonLus += 1;
@@ -198,7 +272,7 @@ function afficherContacts() {
     nom.textContent = contact.username;
     const presence = document.createElement("span");
     presence.className = "presence";
-    presence.textContent = contact.connecte ? "en ligne" : "hors ligne";
+    presence.textContent = etat.saisies.has(contact.id) ? "écrit…" : contact.connecte ? "en ligne" : "hors ligne";
     bouton.append(pastille, nom, presence);
 
     if (contact.nonLus > 0) {
@@ -220,6 +294,8 @@ function afficherEnTete() {
   $("nom-interlocuteur").textContent = contact.username;
   $("statut-interlocuteur").textContent = contact.connecte ? "en ligne" : "hors ligne";
   $("statut-interlocuteur").classList.toggle("en-ligne", contact.connecte);
+  $("saisie-interlocuteur").hidden = !etat.saisies.has(contact.id);
+  $("saisie-interlocuteur").textContent = `${contact.username} est en train d'écrire…`;
 }
 
 function afficherMessages(defilerEnBas) {
@@ -233,10 +309,20 @@ function afficherMessages(defilerEnBas) {
     const heure = document.createElement("time");
     heure.dateTime = message.dateEnvoi;
     heure.textContent = formaterDate(message.dateEnvoi);
+    if (message.expediteurId === etat.moi.id) heure.append(coches(message.etat));
     bulle.append(heure);
     liste.append(bulle);
   }
   if (defilerEnBas) fil.scrollTop = fil.scrollHeight;
+}
+
+/** Une coche : envoyé ; deux : livré ; deux colorées : lu (D-016). */
+function coches(etatMessage) {
+  const marque = document.createElement("span");
+  marque.className = "coches" + (etatMessage === "LU" ? " lu" : "");
+  marque.textContent = etatMessage === "ENVOYE" ? " ✓" : " ✓✓";
+  marque.title = { ENVOYE: "Envoyé", LIVRE: "Livré", LU: "Lu" }[etatMessage];
+  return marque;
 }
 
 /** « 2026-09-21T10:15:30 » devient « 10:15 », précédé du jour s'il ne s'agit pas d'aujourd'hui. */
@@ -250,6 +336,7 @@ function formaterDate(dateEnvoi) {
 // Navigation
 
 async function ouvrirConversation(interlocuteur) {
+  arreterSaisie();
   etat.ouverte = interlocuteur;
   etat.contacts.get(interlocuteur).nonLus = 0;
   $("erreur-envoi").textContent = "";
@@ -259,6 +346,7 @@ async function ouvrirConversation(interlocuteur) {
   try {
     await chargerHistorique(interlocuteur);
     afficherMessages(true);
+    signalerLecture();
   } catch (erreur) {
     $("erreur-envoi").textContent = erreur.message;
   }
@@ -273,10 +361,12 @@ async function demarrer() {
 
 function deconnexion() {
   clearTimeout(etat.reconnexion);
+  clearTimeout(etat.finSaisie);
+  etat.saisies.forEach(clearTimeout);
   const canal = etat.canal;
   Object.assign(etat, {
     jeton: null, moi: null, contacts: new Map(), conversations: new Map(),
-    idsRecus: new Set(), ouverte: null, canal: null,
+    idsRecus: new Set(), ouverte: null, canal: null, saisies: new Map(), saisieEnvoyee: 0,
   });
   canal?.close();
   sessionStorage.removeItem("session");
@@ -311,6 +401,7 @@ $("bouton-inscription").addEventListener("click", async () => {
 $("bouton-deconnexion").addEventListener("click", deconnexion);
 
 $("bouton-retour").addEventListener("click", () => {
+  arreterSaisie();
   etat.ouverte = null;
   afficherContacts();
   montrer("ecran-contacts");
@@ -330,8 +421,16 @@ $("formulaire-envoi").addEventListener("submit", (evenement) => {
   evenement.preventDefault();
   const champ = $("champ-message");
   const contenu = champ.value.trim();
-  if (contenu && envoyer(contenu)) champ.value = "";
+  if (contenu && envoyer(contenu)) {
+    champ.value = "";
+    arreterSaisie();
+  }
 });
+
+$("champ-message").addEventListener("input", jeTape);
+
+// Revenir sur l'application, conversation ouverte : ce qui est arrivé entre-temps est lu.
+document.addEventListener("visibilitychange", signalerLecture);
 
 // Reprise d'une session existante (rafraîchissement de la page)
 
