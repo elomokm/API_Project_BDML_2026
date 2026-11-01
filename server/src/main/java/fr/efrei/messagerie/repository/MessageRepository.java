@@ -43,4 +43,15 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
                                @Param("utilisateurB") Long utilisateurB,
                                @Param("avant") Long avant,
                                Pageable limite);
+
+    /**
+     * Messages d'un destinataire qui n'ont atteint aucun de ses appareils (D-013), dans l'ordre
+     * d'arrivée. S'appuie sur l'index (destinataire_id, etat).
+     */
+    @Query("""
+            SELECT m FROM Message m
+            WHERE m.destinataire.id = :destinataire AND m.etat = fr.efrei.messagerie.entity.EtatMessage.ENVOYE
+            ORDER BY m.id
+            """)
+    List<Message> trouverNonLivres(@Param("destinataire") Long destinataire);
 }
