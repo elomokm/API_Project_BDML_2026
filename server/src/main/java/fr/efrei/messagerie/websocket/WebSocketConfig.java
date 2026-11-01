@@ -1,6 +1,7 @@
 package fr.efrei.messagerie.websocket;
 
 import fr.efrei.messagerie.security.JwtService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -16,10 +17,13 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final MessagerieHandler gestionnaire;
     private final JwtService jwtService;
+    private final String[] origines;
 
-    public WebSocketConfig(MessagerieHandler gestionnaire, JwtService jwtService) {
+    public WebSocketConfig(MessagerieHandler gestionnaire, JwtService jwtService,
+                           @Value("${app.cors.origines}") String[] origines) {
         this.gestionnaire = gestionnaire;
         this.jwtService = jwtService;
+        this.origines = origines;
     }
 
     @Override
@@ -32,8 +36,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
         registre.addHandler(gestionnaire, "/ws/messages")
                 .addInterceptors(new JwtHandshakeIntercepteur(jwtService))
-                .setHandshakeHandler(negociation);
-        // Origines autorisées : par défaut, uniquement la même origine que le serveur. Les
-        // origines des clients seront ajoutées à l'étape 5 (D-015).
+                .setHandshakeHandler(negociation)
+                // Le navigateur n'applique pas CORS au WebSocket : c'est le serveur qui
+                // vérifie l'en-tête Origin du handshake, avec la même liste que l'API (D-015).
+                // Un client hors navigateur (sans Origin) n'est pas concerné : il lui faut
+                // de toute façon un jeton valide.
+                .setAllowedOriginPatterns(origines);
     }
 }

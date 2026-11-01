@@ -98,6 +98,19 @@ class CanalWebSocketTests {
         assertThat(client.session.getAcceptedProtocol()).isEqualTo("messagerie.v1");
     }
 
+    @Test
+    void unePageDUneOrigineInconnue_nePeutPasOuvrirLeCanal_memeAvecUnJeton() {
+        // Le navigateur n'applique pas CORS au WebSocket : le serveur vérifie Origin (D-015).
+        assertThatThrownBy(() -> connecter(jwtService.generer(alice), "https://site-malveillant.example"))
+                .isNotNull();
+    }
+
+    @Test
+    void unePageDuClientSurLeReseauLocal_ouvreLeCanal() throws Exception {
+        Client client = connecter(jwtService.generer(alice), "http://192.168.1.44:8081");
+        assertThat(client.session.isOpen()).isTrue();
+    }
+
     // 4b et 4c. Routage, persistance, retransmission
 
     @Test
@@ -248,7 +261,14 @@ class CanalWebSocketTests {
     // Outils de test
 
     private Client connecter(String jeton) throws Exception {
+        return connecter(jeton, null);
+    }
+
+    private Client connecter(String jeton, String origine) throws Exception {
         WebSocketHttpHeaders entetes = new WebSocketHttpHeaders();
+        if (origine != null) {
+            entetes.setOrigin(origine);
+        }
         entetes.setSecWebSocketProtocol(jeton == null
                 ? List.of("messagerie.v1")
                 : List.of("messagerie.v1", jeton));

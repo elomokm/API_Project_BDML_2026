@@ -2,6 +2,8 @@ package fr.efrei.messagerie.security;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -13,6 +15,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * Chaîne de sécurité (D-008) : sans état, protégée par JWT.
@@ -24,8 +29,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecuriteConfig {
 
     @Bean
-    SecurityFilterChain chaineDeSecurite(HttpSecurity http, JwtService jwtService) throws Exception {
+    SecurityFilterChain chaineDeSecurite(HttpSecurity http, JwtService jwtService,
+                                         CorsConfigurationSource reglesCors) throws Exception {
         http
+                // CORS (D-015) : règles passées explicitement (le bean ci-dessous). Les
+                // requêtes de vérification préalable (OPTIONS) du navigateur sont traitées
+                // avant l'authentification, et une origine non listée est refusée (403).
+                .cors(cors -> cors.configurationSource(reglesCors))
                 // Sans état : aucune session HTTP, chaque requête porte son propre jeton.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // CSRF désactivé : cette attaque exploite un cookie envoyé automatiquement par
@@ -51,6 +61,27 @@ public class SecuriteConfig {
                 .addFilterBefore(new JwtFiltre(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(erreurs -> erreurs.authenticationEntryPoint(refusNonAuthentifie()));
         return http.build();
+    }
+
+    /**
+     * Origines autorisées à appeler l'API depuis un navigateur (D-015).
+     *
+     * Le navigateur interdit par défaut à une page d'appeler une autre origine (ici, le port
+     * 8081 des clients vers le port 8080 de l'API). Le serveur lève cette interdiction
+     * uniquement pour les origines listées, jamais pour toutes (« * »).
+     * Pas de cookies : allowCredentials reste à false, le jeton est joint explicitement.
+     */
+    @Bean
+    CorsConfigurationSource reglesCors(@Value("${app.cors.origines}") List<String> origines) {
+        CorsConfiguration regles = new CorsConfiguration();
+        regles.setAllowedOriginPatterns(origines);
+        regles.setAllowedMethods(List.of("GET", "POST"));
+        regles.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // Sans cela, le client ne pourrait pas lire l'en-tête Location d'un 201.
+        regles.setExposedHeaders(List.of("Location"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", regles);
+        return source;
     }
 
     /**
