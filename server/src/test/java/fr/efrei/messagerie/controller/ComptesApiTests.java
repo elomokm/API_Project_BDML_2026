@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import fr.efrei.messagerie.TestcontainersConfiguration;
 import fr.efrei.messagerie.repository.UtilisateurRepository;
 import org.junit.jupiter.api.Test;
@@ -106,13 +107,16 @@ class ComptesApiTests {
     // Connexion
 
     @Test
-    void seConnecterAvecLesBonsIdentifiants_renvoie200() throws Exception {
+    void seConnecterAvecLesBonsIdentifiants_renvoie200_etUnJeton() throws Exception {
         creerCompte("alice", "motdepasse123").andExpect(status().isCreated());
 
         connecter("alice", "motdepasse123")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("alice"))
-                .andExpect(jsonPath("$.motDePasse").doesNotExist());
+                .andExpect(jsonPath("$.jeton").isString())
+                .andExpect(jsonPath("$.typeJeton").value("Bearer"))
+                .andExpect(jsonPath("$.expireDans").value(3600))
+                .andExpect(jsonPath("$.utilisateur.username").value("alice"))
+                .andExpect(jsonPath("$..motDePasse").isEmpty());
     }
 
     @Test
@@ -132,12 +136,18 @@ class ComptesApiTests {
 
     // Utilisateurs
 
+    /** Se connecte et renvoie l'en-tête « Authorization: Bearer <jeton> » à joindre. */
+    private String entete(String username, String motDePasse) throws Exception {
+        String reponse = connecter(username, motDePasse).andReturn().getResponse().getContentAsString();
+        return "Bearer " + JsonPath.read(reponse, "$.jeton");
+    }
+
     @Test
     void laListeDesUtilisateurs_neContientJamaisDeMotDePasse() throws Exception {
         creerCompte("bob", "motdepasse123").andExpect(status().isCreated());
         creerCompte("alice", "motdepasse123").andExpect(status().isCreated());
 
-        mvc.perform(get("/api/utilisateurs"))
+        mvc.perform(get("/api/utilisateurs").header("Authorization", entete("alice", "motdepasse123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].username").value("alice"))
                 .andExpect(jsonPath("$[1].username").value("bob"))
@@ -149,10 +159,11 @@ class ComptesApiTests {
         String location = creerCompte("alice", "motdepasse123")
                 .andReturn().getResponse().getHeader("Location");
 
-        mvc.perform(get(location))
+        String jeton = entete("alice", "motdepasse123");
+        mvc.perform(get(location).header("Authorization", jeton))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("alice"));
-        mvc.perform(get("/api/utilisateurs/999999"))
+        mvc.perform(get("/api/utilisateurs/999999").header("Authorization", jeton))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
