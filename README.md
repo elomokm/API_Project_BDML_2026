@@ -71,6 +71,17 @@ cd server
 Les tests démarrent leur propre PostgreSQL jetable (Testcontainers) : Docker doit être
 lancé, mais la base de développement n'est jamais touchée.
 
+### Scénario à deux clients (WebSocket)
+
+Avec le serveur lancé, ce script joue le scénario de l'énoncé avec deux clients simultanés
+(création des comptes, connexion, échange de messages, déconnexion, rattrapage, historique) :
+
+```bash
+node scripts/scenario-deux-clients.mjs
+```
+
+Node 22 ou plus, aucune dépendance.
+
 ### Tests manuels (Postman)
 
 Importer `postman/messagerie.postman_collection.json` dans Postman, lancer le serveur, puis
@@ -94,6 +105,31 @@ exécuter la collection dans l'ordre. Chaque exécution crée un utilisateur au 
 - **Erreurs** : format ProblemDetail (RFC 9457, `application/problem+json`).
 - **Mots de passe** : hachés avec Argon2id, jamais renvoyés.
 
+## Canal temps réel (WebSocket)
+
+Adresse : `ws://localhost:8080/ws/messages`. Le jeton obtenu au login est transmis pendant le
+handshake, dans le sous-protocole (jamais dans l'URL) :
+
+```javascript
+const canal = new WebSocket("ws://localhost:8080/ws/messages", ["messagerie.v1", jeton]);
+```
+
+Sans jeton valide, le handshake est refusé (`401`). Tous les messages sont en JSON et portent
+un champ `type`.
+
+| Sens | `type` | Champs |
+|---|---|---|
+| client vers serveur | `message` | `destinataireId`, `contenu` |
+| client vers serveur | `accuse` | `messageId` (accusé de réception automatique) |
+| serveur vers client | `message` | `id`, `expediteurId`, `destinataireId`, `contenu`, `dateEnvoi`, `etat` |
+| serveur vers client | `presence` | `utilisateurId`, `connecte` |
+| serveur vers client | `erreur` | `code`, `message` |
+
+À la réception d'un message, le serveur le valide, l'enregistre, puis le pousse au
+destinataire s'il est connecté. L'expéditeur est toujours l'utilisateur du jeton et la date
+celle du serveur. Un destinataire hors ligne reçoit ses messages en attente dès sa
+reconnexion.
+
 ### Clients
 
 À venir.
@@ -104,6 +140,6 @@ exécuter la collection dans l'ordre. Chaque exécution crée un utilisateur au 
 - [x] Modèle de données et persistance
 - [x] API REST
 - [x] Authentification JWT
-- [ ] Canal WebSocket
+- [x] Canal WebSocket
 - [ ] Clients mobile et bureau
 - [ ] Fonctionnalité bonus
