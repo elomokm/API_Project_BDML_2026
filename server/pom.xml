@@ -23,6 +23,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
+		<!-- D-009 : canal temps réel en WebSocket brut -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
 		<!-- D-002 : accès aux données par Spring Data JPA, base PostgreSQL -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

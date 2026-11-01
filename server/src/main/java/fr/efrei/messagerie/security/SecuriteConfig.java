@@ -39,6 +39,10 @@ public class SecuriteConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(regles -> regles
                         .requestMatchers(HttpMethod.POST, "/api/comptes", "/api/auth/login").permitAll()
+                        // Canal WebSocket : le navigateur ne peut pas y joindre l'en-tête
+                        // Authorization. Le jeton est vérifié par JwtHandshakeIntercepteur,
+                        // pendant le handshake, qui refuse en 401 sans jeton valide (D-010).
+                        .requestMatchers(HttpMethod.GET, "/ws/messages").permitAll()
                         // Page d'erreur interne de Spring : sans cela, une erreur sur une route
                         // publique serait masquée par un 401.
                         .requestMatchers("/error").permitAll()
