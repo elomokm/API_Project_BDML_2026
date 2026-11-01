@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -69,13 +70,14 @@ class PersistanceTests {
     }
 
     @Test
-    void laConversation_contientLesDeuxSensTriesParDate_etRienDautre() {
+    void laConversation_contientLesDeuxSens_etRienDautre() {
         Utilisateur alice = utilisateurs.save(new Utilisateur("alice", "empreinte"));
         Utilisateur bob = utilisateurs.save(new Utilisateur("bob", "empreinte"));
         Utilisateur charlie = utilisateurs.save(new Utilisateur("charlie", "empreinte"));
         LocalDateTime t = LocalDateTime.now(horloge).withNano(0);
 
-        // Enregistrés volontairement dans le désordre : le tri doit venir de la requête.
+        // Enregistrés volontairement dans le désordre des dates : le tri suit l'ordre d'arrivée
+        // sur le serveur (id), qui est aussi le curseur de pagination (D-006).
         messages.save(new Message(bob, alice, "2. Salut Alice", t.plusMinutes(2)));
         messages.save(new Message(alice, bob, "1. Salut Bob", t.plusMinutes(1)));
         messages.save(new Message(alice, bob, "3. Ça va ?", t.plusMinutes(3)));
@@ -85,12 +87,13 @@ class PersistanceTests {
         entityManager.flush();
         entityManager.clear();
 
-        List<String> attendus = List.of("1. Salut Bob", "2. Salut Alice", "3. Ça va ?");
-        assertThat(messages.trouverConversation(alice.getId(), bob.getId()))
+        // La requête lit du plus récent au plus ancien (id décroissant).
+        List<String> attendus = List.of("3. Ça va ?", "1. Salut Bob", "2. Salut Alice");
+        assertThat(messages.trouverDerniers(alice.getId(), bob.getId(), PageRequest.ofSize(10)))
                 .extracting(Message::getContenu)
                 .containsExactlyElementsOf(attendus);
         // Même conversation vue depuis Bob : l'ordre des paramètres ne change rien.
-        assertThat(messages.trouverConversation(bob.getId(), alice.getId()))
+        assertThat(messages.trouverDerniers(bob.getId(), alice.getId(), PageRequest.ofSize(10)))
                 .extracting(Message::getContenu)
                 .containsExactlyElementsOf(attendus);
     }
