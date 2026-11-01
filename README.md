@@ -132,7 +132,34 @@ reconnexion.
 
 ### Clients
 
-À venir.
+```bash
+node scripts/serveur-clients.mjs
+```
+
+Le script sert les deux clients sur le port 8081 et affiche les adresses à ouvrir :
+
+- **client bureau** : `http://localhost:8081/desktop/` sur l'ordinateur ;
+- **client mobile** : `http://<adresse IP de l'ordinateur>:8081/mobile/` sur le téléphone,
+  connecté au même Wi-Fi.
+
+Si le Wi-Fi isole les appareils entre eux (fréquent sur les réseaux d'école ou
+d'entreprise), activer le partage de connexion du téléphone et y connecter l'ordinateur.
+Le pare-feu de l'ordinateur doit autoriser les connexions entrantes vers Java et Node.
+
+Les origines autorisées à appeler l'API (CORS) et à ouvrir le canal sont, par défaut, le
+port 8081 en local et sur les adresses privées (`192.168.*`, `10.*`, `172.*`). Elles se
+règlent avec la variable `APP_ORIGINES`.
+
+## Scénario de démonstration
+
+1. `docker compose up -d`, lancer le serveur, puis `node scripts/serveur-clients.mjs`.
+2. Ordinateur : ouvrir le client bureau, créer ou connecter l'utilisateur 1.
+3. Téléphone : ouvrir le client mobile, créer ou connecter l'utilisateur 2.
+4. Envoyer un message de chaque côté : il apparaît immédiatement sur l'autre appareil.
+5. Se déconnecter sur l'ordinateur, puis se reconnecter : l'historique complet est visible.
+
+Pour repartir d'une base vide avant la démonstration : `docker compose down -v`, puis
+`docker compose up -d`.
 
 ## État d'avancement
 
@@ -141,5 +168,5 @@ reconnexion.
 - [x] API REST
 - [x] Authentification JWT
 - [x] Canal WebSocket
-- [ ] Clients mobile et bureau
+- [x] Clients mobile et bureau
 - [ ] Fonctionnalité bonus
