@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messagerie bureau</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Connexion ou création de compte -->
+  <main id="vue-connexion" class="vue-connexion">
+    <form id="formulaire-connexion" class="carte" novalidate>
+      <h1>Messagerie</h1>
+      <p class="sous-titre">Client bureau</p>
+      <label for="champ-username">Nom d'utilisateur</label>
+      <input id="champ-username" autocomplete="username" required>
+      <label for="champ-mot-de-passe">Mot de passe</label>
+      <input id="champ-mot-de-passe" type="password" autocomplete="current-password" required>
+      <p id="erreur-connexion" class="erreur" role="alert"></p>
+      <div class="actions">
+        <button type="button" id="bouton-inscription" class="secondaire">Créer un compte</button>
+        <button type="submit" class="principal">Se connecter</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- Application : contacts à gauche, conversation à droite -->
+  <div id="vue-application" class="application" hidden>
+    <aside class="panneau-contacts">
+      <header class="profil">
+        <div>
+          <strong id="mon-nom"></strong>
+          <span id="etat-canal" class="etat-canal">connexion…</span>
+        </div>
+        <button id="bouton-deconnexion" class="lien">Déconnexion</button>
+      </header>
+      <h2>Contacts</h2>
+      <ul id="liste-contacts" class="contacts"></ul>
+      <p id="aucun-contact" class="vide" hidden>Aucun autre utilisateur pour l'instant.</p>
+    </aside>
+
+    <section class="panneau-conversation">
+      <div id="sans-conversation" class="vide grand">Choisissez un contact pour commencer.</div>
+      <div id="conversation" class="conversation" hidden>
+        <header class="entete-conversation">
+          <strong id="nom-interlocuteur"></strong>
+          <span id="statut-interlocuteur" class="statut"></span>
+        </header>
+        <div id="fil" class="fil" aria-live="polite">
+          <button id="bouton-plus-anciens" class="lien plus-anciens" hidden>Charger les messages plus anciens</button>
+          <ol id="liste-messages" class="messages"></ol>
+        </div>
+        <p id="erreur-envoi" class="erreur envoi" role="alert"></p>
+        <form id="formulaire-envoi" class="saisie">
+          <input id="champ-message" autocomplete="off" placeholder="Écrire un message (Entrée pour envoyer)" maxlength="2000">
+          <button type="submit" class="principal">Envoyer</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

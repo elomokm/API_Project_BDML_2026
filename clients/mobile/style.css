@@ -1,0 +1,165 @@
+/* Client mobile : une colonne, un écran à la fois, zones tactiles d'au moins 44 px. */
+
+:root {
+  --fond: #f4f6f6;
+  --surface: #ffffff;
+  --texte: #14201f;
+  --texte-doux: #5b6b69;
+  --bordure: #dde3e2;
+  --accent: #0f766e;
+  --accent-texte: #ffffff;
+  --bulle-autre: #e6ecec;
+  --en-ligne: #16a34a;
+  --erreur: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #0d1414;
+    --surface: #152020;
+    --texte: #e6eeed;
+    --texte-doux: #9db0ae;
+    --bordure: #263434;
+    --accent: #2dd4bf;
+    --accent-texte: #062b27;
+    --bulle-autre: #1f2d2d;
+    --en-ligne: #4ade80;
+    --erreur: #f97066;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fond);
+  color: var(--texte);
+  font: 17px/1.4 system-ui, -apple-system, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+button, input { font: inherit; color: inherit; }
+
+/* L'attribut hidden doit toujours gagner, même sur un élément qui a un display. */
+[hidden] { display: none !important; }
+
+.ecran {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Connexion */
+
+.connexion {
+  margin: auto 0;
+  padding: 24px 20px;
+}
+.connexion h1 { margin: 0; font-size: 2rem; }
+.sous-titre { margin: 4px 0 28px; color: var(--texte-doux); }
+.connexion form { display: flex; flex-direction: column; gap: 14px; }
+.connexion label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.connexion input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+  background: var(--surface);
+  font-weight: 400;
+}
+
+button.principal, button.secondaire {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.principal { background: var(--accent); color: var(--accent-texte); }
+button.secondaire { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+button.lien { background: none; border: 0; color: var(--accent); min-height: 44px; cursor: pointer; }
+
+.erreur { color: var(--erreur); margin: 0; min-height: 1.4em; font-size: .95rem; }
+
+/* Barre du haut */
+
+.barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--bordure);
+}
+.barre strong { display: block; }
+.etat-canal, .statut { font-size: .85rem; color: var(--texte-doux); }
+.etat-canal.ouvert::before, .statut.en-ligne::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
+  border-radius: 50%; background: var(--en-ligne);
+}
+.retour {
+  width: 44px; height: 44px; border: 0; background: none;
+  font-size: 2rem; line-height: 1; color: var(--accent); cursor: pointer;
+}
+.interlocuteur { flex: 1; }
+
+/* Contacts */
+
+.contacts { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.contacts button {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: 64px; padding: 8px 16px;
+  border: 0; border-bottom: 1px solid var(--bordure);
+  background: var(--surface); text-align: left; cursor: pointer;
+}
+.pastille {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  background: var(--bordure);
+}
+.pastille.en-ligne { background: var(--en-ligne); }
+.contacts .nom { flex: 1; font-weight: 600; }
+.contacts .presence { color: var(--texte-doux); font-size: .85rem; }
+.non-lus {
+  min-width: 24px; padding: 2px 8px; border-radius: 12px;
+  background: var(--accent); color: var(--accent-texte);
+  font-size: .8rem; font-weight: 700; text-align: center;
+}
+.vide { padding: 24px 16px; color: var(--texte-doux); text-align: center; }
+
+/* Conversation */
+
+.fil { flex: 1; overflow-y: auto; padding: 8px 12px; }
+.plus-anciens { display: block; margin: 0 auto 8px; }
+.messages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.messages li {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: var(--bulle-autre);
+  align-self: flex-start;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.messages li.moi {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-texte);
+}
+.messages time { display: block; margin-top: 2px; font-size: .75rem; opacity: .7; text-align: right; }
+
+.erreur.envoi { padding: 0 16px; }
+.saisie {
+  display: flex; gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--bordure);
+}
+.saisie input {
+  flex: 1; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--bordure); border-radius: 22px;
+  background: var(--fond);
+}
+.saisie button { padding: 0 18px; border-radius: 22px; }
