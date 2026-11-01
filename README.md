@@ -33,8 +33,15 @@ Maven n'a pas besoin d'être installé : le projet embarque le wrapper `mvnw`.
 cp .env.example .env
 ```
 
-Puis choisir un mot de passe dans `.env`. Ce fichier n'est jamais versionné ; il est lu par
-Docker Compose et par le serveur.
+Puis, dans `.env`, choisir un mot de passe pour la base et générer le secret de signature
+des jetons :
+
+```bash
+openssl rand -base64 32   # valeur à copier dans JWT_SECRET
+```
+
+Ce fichier n'est jamais versionné ; il est lu par Docker Compose et par le serveur. Le serveur
+refuse de démarrer si `JWT_SECRET` est absent ou fait moins de 256 bits.
 
 ### 2. Base de données
 
@@ -71,15 +78,21 @@ exécuter la collection dans l'ordre. Chaque exécution crée un utilisateur au 
 
 ## API REST
 
-| Méthode | URL | Rôle | Codes |
-|---|---|---|---|
-| `POST` | `/api/comptes` | Créer un compte | 201, 400, 409 |
-| `POST` | `/api/auth/login` | S'authentifier | 200, 400, 401 |
-| `GET` | `/api/utilisateurs` | Lister les utilisateurs | 200 |
-| `GET` | `/api/utilisateurs/{id}` | Consulter un utilisateur | 200, 404 |
+| Méthode | URL | Rôle | Jeton | Codes |
+|---|---|---|---|---|
+| `POST` | `/api/comptes` | Créer un compte | non | 201, 400, 409 |
+| `POST` | `/api/auth/login` | S'authentifier, recevoir un JWT | non | 200, 400, 401 |
+| `GET` | `/api/utilisateurs` | Lister les utilisateurs | oui | 200, 401 |
+| `GET` | `/api/utilisateurs/{id}` | Consulter un utilisateur | oui | 200, 401, 404 |
+| `GET` | `/api/messages/{utilisateurId}` | Historique de la conversation avec cet utilisateur | oui | 200, 400, 401, 404 |
 
-Les erreurs sont renvoyées au format ProblemDetail (RFC 9457, `application/problem+json`).
-Les mots de passe sont hachés avec Argon2id et ne sont jamais renvoyés.
+- **Authentification** : le login renvoie un JWT (HS256, valable une heure), à joindre à
+  chaque requête protégée dans l'en-tête `Authorization: Bearer <jeton>`. Sans jeton valide,
+  la réponse est `401`.
+- **Historique** : paginé par curseur. `?limite=50` (1 à 100) renvoie les messages les plus
+  récents ; `?avant=<idMessage>` remonte la conversation à partir d'un message.
+- **Erreurs** : format ProblemDetail (RFC 9457, `application/problem+json`).
+- **Mots de passe** : hachés avec Argon2id, jamais renvoyés.
 
 ### Clients
 
@@ -89,8 +102,8 @@ Les mots de passe sont hachés avec Argon2id et ne sont jamais renvoyés.
 
 - [x] Squelette du serveur
 - [x] Modèle de données et persistance
-- [ ] API REST
-- [ ] Authentification JWT
+- [x] API REST
+- [x] Authentification JWT
 - [ ] Canal WebSocket
 - [ ] Clients mobile et bureau
 - [ ] Fonctionnalité bonus
