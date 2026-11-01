@@ -121,7 +121,11 @@ un champ `type`.
 |---|---|---|
 | client vers serveur | `message` | `destinataireId`, `contenu` |
 | client vers serveur | `accuse` | `messageId` (accusé de réception automatique) |
+| client vers serveur | `lu` | `messageId` (messages de cet interlocuteur lus jusqu'à celui-ci) |
+| client vers serveur | `saisie` | `destinataireId`, `actif` (indicateur « en train d'écrire ») |
 | serveur vers client | `message` | `id`, `expediteurId`, `destinataireId`, `contenu`, `dateEnvoi`, `etat` |
+| serveur vers client | `etat` | `messageIds`, `etat` (`LIVRE` ou `LU`) |
+| serveur vers client | `saisie` | `expediteurId`, `actif` |
 | serveur vers client | `presence` | `utilisateurId`, `connecte` |
 | serveur vers client | `erreur` | `code`, `message` |
 
@@ -129,6 +133,10 @@ un champ `type`.
 destinataire s'il est connecté. L'expéditeur est toujours l'utilisateur du jeton et la date
 celle du serveur. Un destinataire hors ligne reçoit ses messages en attente dès sa
 reconnexion.
+
+**Fonctionnalités bonus** : accusé de réception complet (une coche : envoyé ; deux coches :
+livré sur l'appareil du destinataire ; deux coches colorées : lu), et indicateur « en train
+d'écrire », relayé en direct mais jamais enregistré.
 
 ### Clients
 
@@ -169,4 +177,4 @@ Pour repartir d'une base vide avant la démonstration : `docker compose down -v`
 - [x] Authentification JWT
 - [x] Canal WebSocket
 - [x] Clients mobile et bureau
-- [ ] Fonctionnalité bonus
+- [x] Fonctionnalités bonus (accusé de réception, indicateur de saisie)
