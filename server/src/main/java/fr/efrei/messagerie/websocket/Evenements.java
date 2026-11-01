@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import fr.efrei.messagerie.entity.EtatMessage;
 import fr.efrei.messagerie.entity.Message;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Messages envoyés par le serveur sur le canal (D-012). Chacun porte un champ « type » qui
@@ -40,6 +41,25 @@ public final class Evenements {
 
         public static EvenementPresence de(Long utilisateurId, boolean connecte) {
             return new EvenementPresence("presence", utilisateurId, connecte);
+        }
+    }
+
+    /**
+     * Changement d'état de messages envoyés par le destinataire de cet événement (D-017) :
+     * ses coches passent à « livré » ou « lu ».
+     */
+    public record EvenementEtat(String type, List<Long> messageIds, EtatMessage etat) {
+
+        public static EvenementEtat de(List<Long> messageIds, EtatMessage etat) {
+            return new EvenementEtat("etat", messageIds, etat);
+        }
+    }
+
+    /** Indicateur « en train d'écrire » (D-016, D-017), jamais enregistré. */
+    public record EvenementSaisie(String type, Long expediteurId, boolean actif) {
+
+        public static EvenementSaisie de(Long expediteurId, boolean actif) {
+            return new EvenementSaisie("saisie", expediteurId, actif);
         }
     }
 

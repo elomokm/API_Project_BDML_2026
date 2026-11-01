@@ -73,11 +73,30 @@ public class Message {
      * Passage à LIVRE après l'accusé automatique du client destinataire (D-013).
      * Un état ne fait qu'avancer : un message déjà LIVRE ou LU n'est jamais ramené en arrière,
      * même si un accusé arrive en double (reconnexion, doublon).
+     *
+     * @return true si l'état a changé (l'expéditeur doit alors être prévenu)
      */
-    public void marquerLivre() {
+    public boolean marquerLivre() {
         if (etat == EtatMessage.ENVOYE) {
             etat = EtatMessage.LIVRE;
+            return true;
         }
+        return false;
+    }
+
+    /**
+     * Passage à LU quand le destinataire a affiché le message (D-016, D-017). Un message lu
+     * sans accusé préalable passe directement de ENVOYE à LU : l'avoir lu prouve qu'il est
+     * arrivé.
+     *
+     * @return true si l'état a changé (l'expéditeur doit alors être prévenu)
+     */
+    public boolean marquerLu() {
+        if (etat != EtatMessage.LU) {
+            etat = EtatMessage.LU;
+            return true;
+        }
+        return false;
     }
 
     public Long getId() {

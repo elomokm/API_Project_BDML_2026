@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,13 +76,39 @@ public class MessageService {
      * @throws MessageInvalideException si le message est inconnu ou destiné à un autre
      */
     @Transactional
-    public void accuserReception(Long destinataireId, Long messageId) {
-        Message message = messages.findById(messageId)
+    public Optional<Message> accuserReception(Long destinataireId, Long messageId) {
+        Message message = messageDestineA(destinataireId, messageId);
+        // Modification détectée par JPA et écrite en base à la fin de la transaction.
+        return message.marquerLivre() ? Optional.of(message) : Optional.empty();
+    }
+
+    /**
+     * Lecture (D-016, D-017) : tous les messages du même expéditeur jusqu'à messageId inclus
+     * passent à LU. messageId doit désigner un message destiné au lecteur : impossible de
+     * marquer comme lus les messages d'une conversation dont on ne fait pas partie.
+     *
+     * @return l'expéditeur à prévenir et les messages dont l'état a réellement changé
+     * @throws MessageInvalideException si le message est inconnu ou destiné à un autre
+     */
+    @Transactional
+    public Lecture marquerLus(Long lecteurId, Long messageId) {
+        Long expediteurId = messageDestineA(lecteurId, messageId).getExpediteur().getId();
+        List<Long> changes = messages.trouverNonLusJusqua(lecteurId, expediteurId, messageId).stream()
+                .filter(Message::marquerLu)
+                .map(Message::getId)
+                .toList();
+        return new Lecture(expediteurId, changes);
+    }
+
+    /** Résultat d'une lecture : qui prévenir, et pour quels messages. */
+    public record Lecture(Long expediteurId, List<Long> messageIds) {
+    }
+
+    private Message messageDestineA(Long destinataireId, Long messageId) {
+        return messages.findById(messageId)
                 .filter(m -> m.getDestinataire().getId().equals(destinataireId))
                 .orElseThrow(() -> new MessageInvalideException("message_invalide",
                         "Aucun message " + messageId + " ne vous est destiné."));
-        // Modification détectée par JPA et écrite en base à la fin de la transaction.
-        message.marquerLivre();
     }
 
     /** Messages en attente de livraison pour un destinataire, à rattraper à sa connexion. */

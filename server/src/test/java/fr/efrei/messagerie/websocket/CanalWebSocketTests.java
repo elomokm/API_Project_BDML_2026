@@ -258,6 +258,101 @@ class CanalWebSocketTests {
         assertThat(etatDe(id)).isEqualTo(EtatMessage.ENVOYE);
     }
 
+    // Étape 6. Bonus (D-016, D-017)
+
+    @Test
+    void lExpediteurVoitSesCoches_passerALivre_puisALu() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+        Client b = connecter(jwtService.generer(bob));
+        a.envoyer("{\"type\":\"message\",\"destinataireId\":%d,\"contenu\":\"Coches\"}".formatted(bob.getId()));
+        long id = b.attendre(type("message")).<Number>read("$.id").longValue();
+
+        b.envoyer("{\"type\":\"accuse\",\"messageId\":%d}".formatted(id));
+        DocumentContext livre = a.attendre(type("etat"));
+        assertThat(livre.<String>read("$.etat")).isEqualTo("LIVRE");
+        assertThat(livre.<List<Number>>read("$.messageIds")).extracting(Number::longValue).containsExactly(id);
+
+        b.envoyer("{\"type\":\"lu\",\"messageId\":%d}".formatted(id));
+        DocumentContext lu = a.attendre(type("etat"));
+        assertThat(lu.<String>read("$.etat")).isEqualTo("LU");
+        attendreQue(() -> etatDe(id) == EtatMessage.LU);
+    }
+
+    @Test
+    void luJusquA_marqueTousLesMessagesPrecedents_enUnSeulEvenement() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+        List<Long> ids = new ArrayList<>();
+        for (int i = 1; i <= 3; i++) {
+            a.envoyer("{\"type\":\"message\",\"destinataireId\":%d,\"contenu\":\"n%d\"}".formatted(bob.getId(), i));
+            ids.add(a.attendre(type("message")).<Number>read("$.id").longValue());
+        }
+
+        Client b = connecter(jwtService.generer(bob)); // reçoit les 3 en rattrapage, sans accuser
+        b.envoyer("{\"type\":\"lu\",\"messageId\":%d}".formatted(ids.get(2)));
+
+        DocumentContext lu = a.attendre(type("etat"));
+        assertThat(lu.<List<Number>>read("$.messageIds")).extracting(Number::longValue)
+                .containsExactlyElementsOf(ids);
+        // Lu sans accusé préalable : directement de ENVOYE à LU.
+        attendreQue(() -> ids.stream().allMatch(i -> etatDe(i) == EtatMessage.LU));
+    }
+
+    @Test
+    void unAccuseTardif_neRamenePasUnMessageLuALivre() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+        a.envoyer("{\"type\":\"message\",\"destinataireId\":%d,\"contenu\":\"Ordre\"}".formatted(bob.getId()));
+        long id = a.attendre(type("message")).<Number>read("$.id").longValue();
+        Client b = connecter(jwtService.generer(bob));
+        b.envoyer("{\"type\":\"lu\",\"messageId\":%d}".formatted(id));
+        attendreQue(() -> etatDe(id) == EtatMessage.LU);
+
+        b.envoyer("{\"type\":\"accuse\",\"messageId\":%d}".formatted(id));
+
+        assertThat(a.attendreRien(evenement -> "etat".equals(evenement.read("$.type"))
+                && "LIVRE".equals(evenement.read("$.etat")))).isTrue();
+        assertThat(etatDe(id)).isEqualTo(EtatMessage.LU);
+    }
+
+    @Test
+    void onNePeutPasMarquerCommeLuUnMessageQuiNeNousEstPasDestine() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+        a.envoyer("{\"type\":\"message\",\"destinataireId\":%d,\"contenu\":\"Privé\"}".formatted(bob.getId()));
+        long id = a.attendre(type("message")).<Number>read("$.id").longValue();
+
+        a.envoyer("{\"type\":\"lu\",\"messageId\":%d}".formatted(id)); // alice n'est pas la destinataire
+
+        assertThat(a.attendre(type("erreur")).<String>read("$.code")).isEqualTo("message_invalide");
+        assertThat(etatDe(id)).isEqualTo(EtatMessage.ENVOYE);
+    }
+
+    @Test
+    void lIndicateurDeSaisie_estRelaye_etJamaisEnregistre() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+        Client b = connecter(jwtService.generer(bob));
+        long avant = messages.count();
+
+        a.envoyer("{\"type\":\"saisie\",\"destinataireId\":%d,\"actif\":true}".formatted(bob.getId()));
+        DocumentContext debut = b.attendre(type("saisie"));
+        assertThat(debut.<Number>read("$.expediteurId").longValue()).isEqualTo(alice.getId());
+        assertThat(debut.<Boolean>read("$.actif")).isTrue();
+
+        a.envoyer("{\"type\":\"saisie\",\"destinataireId\":%d,\"actif\":false}".formatted(bob.getId()));
+        assertThat(b.attendre(type("saisie")).<Boolean>read("$.actif")).isFalse();
+
+        assertThat(messages.count()).isEqualTo(avant);
+        // L'expéditeur ne reçoit pas son propre indicateur.
+        assertThat(a.attendreRien(type("saisie"))).isTrue();
+    }
+
+    @Test
+    void unIndicateurDeSaisieMalforme_produitUneErreur() throws Exception {
+        Client a = connecter(jwtService.generer(alice));
+
+        a.envoyer("{\"type\":\"saisie\",\"destinataireId\":%d,\"actif\":\"oui\"}".formatted(bob.getId()));
+
+        assertThat(a.attendre(type("erreur")).<String>read("$.code")).isEqualTo("saisie_invalide");
+    }
+
     // Outils de test
 
     private Client connecter(String jeton) throws Exception {

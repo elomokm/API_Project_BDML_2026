@@ -1,12 +1,17 @@
 package fr.efrei.messagerie.websocket;
 
+import fr.efrei.messagerie.entity.EtatMessage;
 import fr.efrei.messagerie.entity.Message;
 import fr.efrei.messagerie.exception.MessageInvalideException;
 import fr.efrei.messagerie.security.UtilisateurConnecte;
 import fr.efrei.messagerie.service.MessageService;
+import fr.efrei.messagerie.service.MessageService.Lecture;
 import fr.efrei.messagerie.websocket.Evenements.EvenementErreur;
+import fr.efrei.messagerie.websocket.Evenements.EvenementEtat;
 import fr.efrei.messagerie.websocket.Evenements.EvenementMessage;
 import fr.efrei.messagerie.websocket.Evenements.EvenementPresence;
+import fr.efrei.messagerie.websocket.Evenements.EvenementSaisie;
+import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -98,6 +103,8 @@ public class MessagerieHandler extends TextWebSocketHandler {
             switch (nomType) {
                 case "message" -> recevoirMessage(moi, recu);
                 case "accuse" -> recevoirAccuse(moi, recu);
+                case "lu" -> recevoirLecture(moi, recu);
+                case "saisie" -> recevoirSaisie(moi, recu);
                 default -> throw new MessageInvalideException("type_inconnu",
                         "Type de message absent ou inconnu.");
             }
@@ -141,7 +148,44 @@ public class MessagerieHandler extends TextWebSocketHandler {
             throw new MessageInvalideException("message_invalide",
                     "messageId doit être un identifiant numérique.");
         }
-        messageService.accuserReception(moi.id(), messageId.asLong());
+        // Si l'état a changé, l'expéditeur voit sa coche passer à « livré » (D-017).
+        messageService.accuserReception(moi.id(), messageId.asLong())
+                .ifPresent(livre -> registre.envoyer(livre.getExpediteur().getId(), versJson(
+                        EvenementEtat.de(List.of(livre.getId()), EtatMessage.LIVRE))));
+    }
+
+    /** « J'ai lu les messages de cet interlocuteur jusqu'à messageId » (D-017). */
+    private void recevoirLecture(UtilisateurConnecte moi, JsonNode recu) {
+        JsonNode messageId = recu.get("messageId");
+        if (messageId == null || !messageId.isIntegralNumber()) {
+            throw new MessageInvalideException("message_invalide",
+                    "messageId doit être un identifiant numérique.");
+        }
+        Lecture lecture = messageService.marquerLus(moi.id(), messageId.asLong());
+        if (!lecture.messageIds().isEmpty()) {
+            registre.envoyer(lecture.expediteurId(),
+                    versJson(EvenementEtat.de(lecture.messageIds(), EtatMessage.LU)));
+        }
+    }
+
+    /**
+     * Indicateur de saisie (D-016, D-017) : simplement relayé, jamais enregistré. Si le
+     * destinataire est hors ligne, il est abandonné (registre.envoyer ne fait alors rien).
+     */
+    private void recevoirSaisie(UtilisateurConnecte moi, JsonNode recu) {
+        JsonNode destinataire = recu.get("destinataireId");
+        if (destinataire == null || !destinataire.isIntegralNumber()) {
+            throw new MessageInvalideException("destinataire_invalide",
+                    "destinataireId doit être un identifiant numérique.");
+        }
+        JsonNode actif = recu.get("actif");
+        if (actif == null || !actif.isBoolean()) {
+            throw new MessageInvalideException("saisie_invalide", "actif doit valoir true ou false.");
+        }
+        if (destinataire.asLong() != moi.id()) {
+            registre.envoyer(destinataire.asLong(),
+                    versJson(EvenementSaisie.de(moi.id(), actif.booleanValue())));
+        }
     }
 
     // Outils

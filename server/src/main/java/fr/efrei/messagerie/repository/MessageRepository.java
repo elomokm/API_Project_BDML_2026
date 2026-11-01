@@ -54,4 +54,18 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
             ORDER BY m.id
             """)
     List<Message> trouverNonLivres(@Param("destinataire") Long destinataire);
+
+    /**
+     * Messages d'un expéditeur vers un destinataire, jusqu'à un identifiant inclus, pas encore
+     * lus : ceux que l'événement « lu jusqu'à » fait passer à LU (D-017).
+     */
+    @Query("""
+            SELECT m FROM Message m
+            WHERE m.destinataire.id = :destinataire AND m.expediteur.id = :expediteur
+              AND m.id <= :jusqua AND m.etat <> fr.efrei.messagerie.entity.EtatMessage.LU
+            ORDER BY m.id
+            """)
+    List<Message> trouverNonLusJusqua(@Param("destinataire") Long destinataire,
+                                      @Param("expediteur") Long expediteur,
+                                      @Param("jusqua") Long jusqua);
 }
